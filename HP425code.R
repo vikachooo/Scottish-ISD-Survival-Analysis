@@ -310,4 +310,106 @@ emean > rmean
 
 
 
+#===========Subgroup analyses of mean survival time and survival curve for covariates===========
 
+#### comorbidity #### 
+# Fit Kaplan-Meier curves by comorbidity groups
+km_fit_comorb <- survfit(surv_object ~ comorb, data = SCOT_ISD)
+
+#restricted mean
+print(km_fit_comorb, print.rmean=TRUE) 
+
+#extended mean - too complicated
+
+# Plot the survival curves by comorbidity groups
+ggsurvplot(km_fit_comorb, data = SCOT_ISD, risk.table = TRUE, 
+           ggtheme = theme_minimal(), 
+           title = "Kaplan-Meier Survival Curves by Comorbidity Groups")
+
+
+# Perform the log-rank test comparing survival between comorbidity groups
+logrank_test1 <- survdiff(surv_object ~ SCOT_ISD$comorb)
+
+# Print the test results
+print(logrank_test1) #Chisq= 818, p= <2e-16 
+#statistically significant difference in the survivor functions
+
+
+
+#### operation #### 
+
+km_fit_oper <- survfit(surv_object ~ oper, data = SCOT_ISD)
+
+#restricted mean
+print(km_fit_oper, print.rmean=TRUE)
+
+# the survival curves by oper groups
+ggsurvplot(km_fit_oper, data = SCOT_ISD, risk.table = TRUE, 
+           ggtheme = theme_minimal(), 
+           title = "Kaplan-Meier Survival Curves by Operation Groups")
+
+
+# Perform the log-rank test comparing survival between comorbidity groups
+logrank_test2 <- survdiff(surv_object ~ SCOT_ISD$oper)
+
+# Print the test results
+print(logrank_test2) #Chisq= 30.4 , p= 3e-08
+
+#### sex #### 
+
+km_fit_sex <- survfit(surv_object ~ female, data = SCOT_ISD)
+
+#restricted mean
+print(km_fit_sex, print.rmean=TRUE)
+
+# the survival curves by oper groups
+ggsurvplot(km_fit_sex, data = SCOT_ISD, risk.table = TRUE, 
+           ggtheme = theme_minimal(), 
+           title = "Kaplan-Meier Survival Curves by Gender")
+
+
+# Perform the log-rank test comparing survival between comorbidity groups
+logrank_test3 <- survdiff(surv_object ~ SCOT_ISD$female)
+
+# Print the test results
+print(logrank_test3) #Chisq= 92.4 , p= <2e-16 
+
+
+#### age_50 #### 
+
+km_fit_age50 <- survfit(surv_object ~ age_50, data = SCOT_ISD)
+
+#restricted mean
+print(km_fit_age50, print.rmean=TRUE)
+
+# the survival curves by oper groups
+ggsurvplot(km_fit_age50, data = SCOT_ISD, risk.table = TRUE, 
+           ggtheme = theme_minimal(), 
+           title = "Kaplan-Meier Survival Curves by Age 50 Group")
+
+
+# Perform the log-rank test comparing survival between comorbidity groups
+logrank_test4 <- survdiff(surv_object ~ SCOT_ISD$age_50)
+
+# Print the test results
+print(logrank_test4) # Chisq= 825  on 1 degrees of freedom, p= <2e-16 
+
+
+#### los_20 #### 
+
+km_fit_los20 <- survfit(surv_object ~ los_20, data = SCOT_ISD)
+
+#restricted mean
+print(km_fit_los20, print.rmean=TRUE)
+
+# the survival curves by oper groups
+ggsurvplot(km_fit_los20, data = SCOT_ISD, risk.table = TRUE, 
+           ggtheme = theme_minimal(), 
+           title = "Kaplan-Meier Survival Curves by Age 50 Group")
+
+
+# Perform the log-rank test comparing survival between comorbidity groups
+logrank_test5 <- survdiff(surv_object ~ SCOT_ISD$los_20)
+
+# Print the test results
+print(logrank_test5) # Chisq= 587 , p= <2e-16 
