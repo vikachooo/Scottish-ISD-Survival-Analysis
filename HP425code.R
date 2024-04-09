@@ -1,6 +1,12 @@
 
 install.packages("haven")
 install.packages("janitor")
+install.packages(c("sandwich", "lmtest", "stargazer"))
+install.packages("survival")
+install.packages("survminer")
+install.packages("survRM2")
+install.packages("flexsurv")
+
 library(haven)
 library(janitor)
 library(tidyverse)
@@ -9,7 +15,7 @@ library(tidyverse)
 SCOT_ISD <- read_dta("C:/Users/VictoriaZaitceva/Desktop/personal/HP425/HP425_summative dataset_2022-23.dta")
 
 # count of deaths
-SCOT_ISD %>% group_by(death) %>% summarise(N=n())
+SCOT_ISD %>% group_by(death) %>% summarise(N=n()) #table(SCOT_ISD$death)
 # death = 0 - patients are right-censored
 
 SCOT_ISD <- SCOT_ISD %>%
@@ -191,3 +197,97 @@ SCOT_ISD <- SCOT_ISD %>%
 SCOT_ISD %>%
   count(los_20) %>%
   mutate(percentage = n / sum(n) * 100) #13.5% patients LoS >=20 days
+
+
+#===============LINEAR PROBABILITY MODEL/LINEAR REGRESSION=========== 
+
+library(sandwich)
+library(lmtest)
+library(stargazer)
+
+# regression models
+
+lmodel1 <- lm(timetodeath ~ ageyrs + I(ageyrs^2), data = SCOT_ISD)
+lmodel2 <- lm(timetodeath ~ ageyrs + I(ageyrs^2) + female, data = SCOT_ISD)
+lmodel3 <- lm(timetodeath ~ ageyrs + I(ageyrs^2) + female + los, data = SCOT_ISD)
+lmodel4 <- lm(timetodeath ~ ageyrs + I(ageyrs^2) + female + los + oper, data = SCOT_ISD)
+lmodel5 <- lm(timetodeath ~ ageyrs + I(ageyrs^2) + female + los + oper + comorb, data = SCOT_ISD)
+
+
+# robust standard errors
+robust_se1 <- sqrt(diag(vcovHC(lmodel1, type = "HC1")))
+robust_se2 <- sqrt(diag(vcovHC(lmodel2, type = "HC1")))
+robust_se3 <- sqrt(diag(vcovHC(lmodel3, type = "HC1")))
+robust_se4 <- sqrt(diag(vcovHC(lmodel4, type = "HC1")))
+robust_se5 <- sqrt(diag(vcovHC(lmodel5, type = "HC1")))
+
+# nested table
+stargazer(lmodel1, lmodel2, lmodel3, lmodel4, lmodel5, type = "text",
+          se = list(robust_se1, robust_se2, robust_se3, robust_se4, robust_se5),
+          covariate.labels = c("Age (Years)", "Age Squared", "Female", "Length of Stay", "Operation", "Comorbidity"),
+          omit.stat = "all", model.numbers = FALSE,
+          column.labels = c("OLS-I", "OLS-II", "OLS-III", "OLS-IV", "OLS-V"),
+          title = "OLS Regression Results")
+
+
+
+#================== NON-PARAMETRIC SURVIVAL MODEL==============
+
+library(survival)
+library(survminer)
+library(survRM2)
+
+
+
+summary(SCOT_ISD$timetoevent)
+SCOT_ISD$timetoevent[SCOT_ISD$timetoevent == 0] <- 0.5
+summary(SCOT_ISD$timetoevent)
+
+
+surv_object <- Surv(time = SCOT_ISD$timetoevent, event = SCOT_ISD$death)
+# The Surv function takes the time-to-event data and the event indicator, where death == 1
+
+
+
+fit <- survfit(surv_object ~ 1, data = SCOT_ISD)  # Basic Kaplan-Meier estimator
+summary(fit)
+ggsurvplot(fit, data = SCOT_ISD, risk.table = TRUE)  # Enhanced visualization with survminer
+
+#### Restricted mean survival time (which accounts for censoring) #### 
+# The RMST is defined as a measure of average survival from time 0 to a specific time point, and can be estimated by taking the area under the survival curve up to that point
+
+fit2 <- survfit(Surv(timetoevent, death) ~ 1, data = SCOT_ISD)
+
+print(fit2, print.rmean=TRUE) #By default, this assumes that the longest survival time is equal to the longest survival time in the data. You can set this to a different value by adding an rmean argument (e.g., print(km, print.rmean=TRUE, rmean=250)
+#The restricted mean is a more reliable measure, but might underestimate the mean survival time due to censoring
+rmean <- 3296
+
+
+#### Extended mean  survival time ####
+# forecasts the graph until all people die, extends the observed survival by projecting 
+# the survival curve to zero
+
+#1 way
+# Fit an exponential model to your data
+exp_model <- survreg(Surv(timetoevent, death) ~ 1, data = SCOT_ISD, dist = "exponential")
+# The rate parameter (lambda) for the exponential distribution can be calculated as 1/exp(coef)
+lambda <- 1 / exp(coef(exp_model))
+# The mean survival time is the reciprocal of the rate parameter
+emean <- 1 / lambda
+
+
+#2 way - same result
+library(flexsurv)
+exp_fit <- flexsurvreg(Surv(timetoevent, death) ~ 1, data = SCOT_ISD, dist = "exp")
+# Extract the rate parameter estimate
+rate_estimate <- exp_fit$res["rate", "est"]
+# Calculate the mean survival time as the reciprocal of the rate parameter
+emean <- 1 / rate_estimate
+
+emean > rmean
+# We do see a higher mean of survival time for the extended mean command. This makes sense as 
+# extended mean is always higher than the restricted mean as it extends the observed survival by projecting 
+# the survival curve to zero. The extended mean accounts for the censoring of observations with large 
+# survival times. This approach is limited at it assumes an exponential functional form, which might not fit 
+# the data.
+
