@@ -1,4 +1,4 @@
-
+#### setup ####
 install.packages("haven")
 install.packages("janitor")
 install.packages(c("sandwich", "lmtest", "stargazer"))
@@ -14,6 +14,7 @@ library(tidyverse)
 
 SCOT_ISD <- read_dta("C:/Users/VictoriaZaitceva/Desktop/personal/HP425/HP425_summative dataset_2022-23.dta")
 
+#================================Descriptive statistics============
 # count of deaths
 SCOT_ISD %>% group_by(death) %>% summarise(N=n()) #table(SCOT_ISD$death)
 # death = 0 - patients are right-censored
@@ -244,21 +245,36 @@ SCOT_ISD$timetoevent[SCOT_ISD$timetoevent == 0] <- 0.5
 summary(SCOT_ISD$timetoevent)
 
 
-surv_object <- Surv(time = SCOT_ISD$timetoevent, event = SCOT_ISD$death)
+
+#### Basic Kaplan-Meier estimator ####
+
 # The Surv function takes the time-to-event data and the event indicator, where death == 1
+surv_object <- Surv(time = SCOT_ISD$timetoevent, event = SCOT_ISD$death)
 
 
+km_fit <- survfit(surv_object ~ 1, data = SCOT_ISD) 
+summary(km_fit)
+ggsurvplot(km_fit, data = SCOT_ISD, risk.table = TRUE,
+           ggtheme = theme_minimal(), 
+           title = "Kaplan-Meier Survival Function")  # survminer
 
-fit <- survfit(surv_object ~ 1, data = SCOT_ISD)  # Basic Kaplan-Meier estimator
-summary(fit)
-ggsurvplot(fit, data = SCOT_ISD, risk.table = TRUE)  # Enhanced visualization with survminer
+#### KM hazard function ####
+
+# Plotting the cumulative hazard function
+ggsurvplot(km_fit, data = SCOT_ISD, fun = 'cumhaz', risk.table = TRUE,
+           ggtheme = theme_minimal(),
+           title = "Cumulative Hazard Function Based on KM Estimates")
+
+#the Kaplan-Meier method provides survival probabilities over time, not hazard rates. The hazard function, which indicates the instantaneous risk of failure at any given time point, can be challenging to estimate non-parametrically without making assumptions about the underlying hazard rate
+
+
 
 #### Restricted mean survival time (which accounts for censoring) #### 
 # The RMST is defined as a measure of average survival from time 0 to a specific time point, and can be estimated by taking the area under the survival curve up to that point
 
-fit2 <- survfit(Surv(timetoevent, death) ~ 1, data = SCOT_ISD)
+fit <- survfit(Surv(timetoevent, death) ~ 1, data = SCOT_ISD)
 
-print(fit2, print.rmean=TRUE) #By default, this assumes that the longest survival time is equal to the longest survival time in the data. You can set this to a different value by adding an rmean argument (e.g., print(km, print.rmean=TRUE, rmean=250)
+print(fit, print.rmean=TRUE) #By default, this assumes that the longest survival time is equal to the longest survival time in the data. You can set this to a different value by adding an rmean argument (e.g., print(km, print.rmean=TRUE, rmean=250)
 #The restricted mean is a more reliable measure, but might underestimate the mean survival time due to censoring
 rmean <- 3296
 
@@ -290,4 +306,8 @@ emean > rmean
 # the survival curve to zero. The extended mean accounts for the censoring of observations with large 
 # survival times. This approach is limited at it assumes an exponential functional form, which might not fit 
 # the data.
+
+
+
+
 
