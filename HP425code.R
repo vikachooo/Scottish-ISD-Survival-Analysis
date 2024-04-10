@@ -413,3 +413,14 @@ logrank_test5 <- survdiff(surv_object ~ SCOT_ISD$los_20)
 
 # Print the test results
 print(logrank_test5) # Chisq= 587 , p= <2e-16 
+
+
+#===============PARAMETRIC SURVIVAL MODEL==============
+
+#===============Exponential and Weibull model==============
+
+
+
+
+
+
