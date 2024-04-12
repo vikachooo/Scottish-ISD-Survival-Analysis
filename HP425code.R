@@ -144,7 +144,6 @@ SCOT_ISD %>%
   tabyl(age_50) # 90.7% patients are 50+
 
 # groups for LoS
-library(dplyr)
 
 SCOT_ISD <- SCOT_ISD %>%
   mutate(losgrp1 = case_when(
@@ -417,9 +416,170 @@ print(logrank_test5) # Chisq= 587 , p= <2e-16
 
 #===============PARAMETRIC SURVIVAL MODEL==============
 
-#===============Exponential and Weibull model==============
+#===============Exponential model==============
+
+#### The mean survival time estimated by the exponential model without adding controls ####
+
+# by hand 
+
+1/0.0002708 # 3692.762 days
+
+# taken by the mean of predicted mean survival 
+
+# Fit an exponential model to the data without additional covariates
+exp_model_uncon <- survreg(Surv(timetoevent, death) ~ 1, data = SCOT_ISD, dist = "exponential")
+
+# The rate parameter (lambda) from the model; coef() extracts the model coefficients
+lambda_uncon <- 1 / exp(coef(exp_model_uncon))
+
+# Calculate the mean survival time as the reciprocal of the rate parameter
+mean_surv_time_uncon <- 1 / lambda_uncon
+
+mean_surv_time_uncon # 3693.0843 days
 
 
+#### Adding control variables #### 
+
+# Fit the exponential model with control variables
+exp_model_controls <- survreg(Surv(timetoevent, death) ~ ageyrs + los + female + comorb + oper, 
+                              data = SCOT_ISD, dist = "exponential")
+
+# model summary to see the coefficients
+summary(exp_model_controls) #positive coefficient =  lower duration
+#an increased value  is associated with a decreased expected survival
+
+
+#R: A positive coefficient implies longer survival times (lower hazard) because it increases the log survival time.
+#Stata: A positive coefficient implies higher hazard (shorter survival times) because it directly increases the hazard rate.
+
+
+# Predict the survival time for each observation
+predicted_survival_times <- predict(exp_model_controls, type = "response")
+
+# The mean of the predicted survival times
+mean_predicted_survival_time <- mean(predicted_survival_times)
+
+mean_predicted_survival_time # 4466.623 days
+
+#### Quality ####
+# evaluate the goodness of fit of exponential survival model using the Akaike Information Criterion (AIC)
+
+# Retrieve the AIC score for the fitted model
+aic_score <- AIC(exp_model_controls)
+aic_score # 193880.7
+
+# exponential survival function ??
+
+# hazard looks ok
+
+# Since the hazard is constant, create a data frame with the same hazard value across a range of time points
+hazard_data <- data.frame(Time = seq(from = 0, to = max(SCOT_ISD_nozero$timetoevent), by = 1),
+                          Hazard = rep(lambda, length.out = length(seq(from = 0, to = max(SCOT_ISD_nozero$timetoevent), by = 1))))
+
+# Plot the constant hazard function
+ggplot(hazard_data, aes(x = Time, y = Hazard)) +
+  geom_line(color = "red") +
+  labs(title = "Exponential Model Hazard Function", x = "Time", y = "Hazard Rate") +
+  theme_minimal()
+
+
+
+
+
+
+#======================Weibull model==================
+
+weibull_model <- survreg(Surv(timetoevent, death) ~ ageyrs + los + female + comorb + oper, 
+                         data = SCOT_ISD_nozero, dist = "weibull")
+
+summary(weibull_model)
+model_summary <- summary(weibull_model)
+format(exp(coef(model_summary)), scientific = FALSE) #hazard datios
+
+
+weibul_surv <- survfit(weibull_model)
+ 
+
+weibull_shape_param <- 1 / weibull_model$scale  # Shape parameter (alpha)
+weibull_shape_param # α<1: The hazard function is decreasing over time.
+
+
+
+
+AIC(weibull_model) #192652.1
+
+
+# Predict mean survival time
+SCOT_ISD$survmean_wei <- predict(weibull_model, type = "response")
+summary(SCOT_ISD$survmean_wei) #5013.3  days
+
+
+
+
+#=====================COX========================
+
+cox_model <- coxph(Surv(timetoevent, death) ~ ageyrs + los + female + comorb + oper, data = SCOT_ISD)
+summary(cox_model)
+
+library(survminer)
+
+# Generate survival curve from Cox model
+cox_surv <- survfit(cox_model)
+
+# Plot survival curve
+ggsurvplot(cox_surv, data = SCOT_ISD, conf.int = TRUE,
+           ggtheme = theme_minimal(), title = "Cox Proportional Hazards Model Survival Function")
+
+
+
+#### assessing the proportional hazards assumption ####
+
+# Test using Schoenfeld residuals (Grambsch and Therneau hypothesis test)
+
+ph_test <- cox.zph(cox_model)
+
+ph_test #statistically significant evidence (p<0.05) against the null hypothesis of proportionality for all covariates
+#  Significant p-values (commonly < 0.05 or < 0.01) suggest evidence against the proportional hazards assumption for the corresponding covariate or the model as a whole.
+
+# Schoenfeld residuals for each covariate
+plot(ph_test)
+# clear trend - violation 
+# The PH assumption is violated.
+
+
+#Log-Log plot of survival for each binary covariate (Graphical examination)
+
+
+# gender
+loglog_female <- survfit(Surv(timetoevent, death) ~ female, data = SCOT_ISD)
+
+ggsurvplot(loglog_female, data = SCOT_ISD, fun = "cloglog",
+           xlab = "Time (in days) using log",
+           ylab = "Log-log Survival",
+           title = "Log-log Curves by Gender",
+           ggtheme = theme_minimal())
+# The PH assumption seems tp hold.
+
+# operation
+loglog_oper <- survfit(Surv(timetoevent, death) ~ oper, data = SCOT_ISD)
+
+ggsurvplot(loglog_oper, data = SCOT_ISD, fun = "cloglog",
+           xlab = "Time (in days) using log",
+           ylab = "Log-log Survival",
+           title = "Log-log Curves by Operation",
+           ggtheme = theme_minimal())
+## The PH assumption seems slightly violated.
+
+# comorb
+
+loglog_comorb <- survfit(Surv(timetoevent, death) ~ comorb, data = SCOT_ISD)
+
+ggsurvplot(loglog_comorb, data = SCOT_ISD, fun = "cloglog",
+           xlab = "Time (in days) using log",
+           ylab = "Log-log Survival",
+           title = "Log-log Curves by Comorbidity",
+           ggtheme = theme_minimal())
+# The PH assumption is violated.
 
 
 
